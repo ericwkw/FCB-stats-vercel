@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Users, Calendar, FileText, Settings, Moon, Sun, History, BarChart2, Home, MapPin, Coffee } from 'lucide-react';
+import { Trophy, Users, Calendar, FileText, Settings, Moon, Sun, History, BarChart2, Home, MapPin, Coffee, Cloud, Loader2 } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -8,6 +9,7 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) => {
+  const { isLoading } = useApp();
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
@@ -124,7 +126,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
         </nav>
         
         <div className="mt-8 pt-6 border-t border-white/10 space-y-4">
-            {/* Ko-fi Button */}
             <button 
               onClick={handleKofiClick}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#72a4f2] hover:bg-[#5a8fd9] text-white rounded-xl font-bold transition-all shadow-lg transform hover:-translate-y-0.5"
@@ -140,18 +141,28 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
                {isDark ? <Sun size={18} /> : <Moon size={18} />}
                <span className="font-medium text-sm">{isDark ? 'Light Mode' : 'Dark Mode'}</span>
             </button>
-            <div className="text-xs text-gray-600 text-center">
+            <div className="text-xs text-gray-600 text-center flex flex-col items-center">
                 <p>Team Stat Tracker v1.5</p>
-                <p>Ready for Vercel</p>
+                <div className="flex items-center gap-1 mt-1 text-pitch-500">
+                    <Cloud size={12} />
+                    <span>Cloud Synced</span>
+                </div>
             </div>
         </div>
       </aside>
 
       {/* Main Content */}
       <main className="flex-1 md:ml-64 p-4 md:p-8 overflow-y-auto">
-        <div className="max-w-7xl mx-auto">
-            {children}
-        </div>
+        {isLoading ? (
+            <div className="h-full w-full flex flex-col items-center justify-center text-gray-400 space-y-4 min-h-[50vh]">
+                <Loader2 size={48} className="animate-spin text-pitch-500" />
+                <p className="font-medium">Syncing with database...</p>
+            </div>
+        ) : (
+            <div className="max-w-7xl mx-auto">
+                {children}
+            </div>
+        )}
       </main>
     </div>
   );
