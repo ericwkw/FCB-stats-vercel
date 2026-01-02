@@ -1,15 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Player, Match, MatchType, StadiumSize, Position, PlayerStats, SynergyPair, AppSettings, Stadium, BackupData } from '../types';
 import { MATCH_TYPE_WEIGHTS, STADIUM_SIZE_WEIGHTS, BASE_POINTS } from '../constants';
-import { supabase } from '../services/supabase';
 
 interface AppContextType {
   players: Player[];
   matches: Match[];
   stadiums: Stadium[];
   settings: AppSettings;
-  isLoading: boolean;
-  matchToEdit: Match | null;
+  matchToEdit: Match | null; // For passing data to MatchManager
   setMatchToEdit: (match: Match | null) => void;
   addPlayer: (player: Player) => void;
   updatePlayer: (player: Player) => void;
@@ -17,10 +15,10 @@ interface AppContextType {
   updatePlayerAvatar: (id: string, url: string) => void;
   addMatch: (match: Match) => void;
   updateMatch: (updatedMatch: Match) => void;
-  deleteMatch: (id: string) => void;
-  importData: (data: BackupData) => void;
+  deleteMatch: (id: string) => void; // New
+  importData: (data: BackupData) => void; // Updated from importMatches
   addStadium: (stadium: Stadium) => void;
-  updateStadium: (stadium: Stadium) => void;
+  updateStadium: (stadium: Stadium) => void; // New
   deleteStadium: (id: string) => void;
   updateSettings: (newSettings: AppSettings) => void;
   getPlayerStats: (playerId: string) => PlayerStats;
@@ -31,271 +29,185 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// Initial Mock Data
+const INITIAL_PLAYERS: Player[] = [
+  { id: '1', name: 'Tsubasa', position: Position.MF, avatarUrl: 'https://randomuser.me/api/portraits/men/32.jpg' },
+  { id: '2', name: 'Hyuga', position: Position.FW, avatarUrl: 'https://randomuser.me/api/portraits/men/86.jpg' },
+  { id: '3', name: 'Wakabayashi', position: Position.GK, avatarUrl: 'https://randomuser.me/api/portraits/men/11.jpg' },
+  { id: '4', name: 'Misaki', position: Position.MF, avatarUrl: 'https://randomuser.me/api/portraits/men/64.jpg' },
+];
+
+const INITIAL_STADIUMS: Stadium[] = [
+  { id: '1', name: 'Community Center Field', size: StadiumSize.SMALL, mapsUrl: '', imageUrl: '' },
+  { id: '2', name: 'Riverside Park', size: StadiumSize.MEDIUM, mapsUrl: '', imageUrl: '' },
+  { id: '3', name: 'City Stadium', size: StadiumSize.LARGE, mapsUrl: '', imageUrl: '' },
+];
+
 const INITIAL_SETTINGS: AppSettings = {
     matchTypeWeights: { ...MATCH_TYPE_WEIGHTS },
     stadiumSizeWeights: { ...STADIUM_SIZE_WEIGHTS },
     basePoints: { ...BASE_POINTS }
 };
 
+// Storage Keys
+const KEYS = {
+    PLAYERS: 'pp_players_v1',
+    MATCHES: 'pp_matches_v1',
+    STADIUMS: 'pp_stadiums_v1',
+    SETTINGS: 'pp_settings_v1'
+};
+
+// Helper to get data safely
+const getLocalStorage = <T,>(key: string, fallback: T): T => {
+    if (typeof window === 'undefined') return fallback;
+    try {
+        const item = window.localStorage.getItem(key);
+        return item ? JSON.parse(item) : fallback;
+    } catch (error) {
+        console.warn(`Error reading ${key} from localStorage`, error);
+        return fallback;
+    }
+};
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [stadiums, setStadiums] = useState<Stadium[]>([]);
-  const [settings, setSettings] = useState<AppSettings>(INITIAL_SETTINGS);
+  // Initialize state from LocalStorage or Fallback
+  const [players, setPlayers] = useState<Player[]>(() => getLocalStorage(KEYS.PLAYERS, INITIAL_PLAYERS));
+  const [matches, setMatches] = useState<Match[]>(() => getLocalStorage(KEYS.MATCHES, []));
+  const [stadiums, setStadiums] = useState<Stadium[]>(() => getLocalStorage(KEYS.STADIUMS, INITIAL_STADIUMS));
+  
+  // Robust Settings Initialization: Deep merge to ensure new keys (like OWN_GOAL) exist if user has old data
+  const [settings, setSettings] = useState<AppSettings>(() => {
+      const stored = getLocalStorage(KEYS.SETTINGS, INITIAL_SETTINGS);
+      return {
+          ...INITIAL_SETTINGS,
+          ...stored,
+          matchTypeWeights: { ...INITIAL_SETTINGS.matchTypeWeights, ...stored.matchTypeWeights },
+          stadiumSizeWeights: { ...INITIAL_SETTINGS.stadiumSizeWeights, ...stored.stadiumSizeWeights },
+          basePoints: { ...INITIAL_SETTINGS.basePoints, ...stored.basePoints }
+      };
+  });
+  
   const [matchToEdit, setMatchToEdit] = useState<Match | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
 
-  // -- FETCH INITIAL DATA --
+  // Persistence Effects
   useEffect(() => {
-    const fetchAllData = async () => {
-        setIsLoading(true);
-        try {
-            // 1. Fetch Players
-            const { data: playersData, error: playersError } = await supabase.from('players').select('*');
-            if (playersError) throw playersError;
-            
-            // Map snake_case from DB to camelCase for app
-            const mappedPlayers: Player[] = (playersData || []).map((p: any) => ({
-                id: p.id,
-                name: p.name,
-                position: p.position as Position,
-                avatarUrl: p.avatar_url,
-                isExternal: p.is_external
-            }));
+    localStorage.setItem(KEYS.PLAYERS, JSON.stringify(players));
+  }, [players]);
 
-            // 2. Fetch Stadiums
-            const { data: stadiumData, error: stadiumError } = await supabase.from('stadiums').select('*');
-            if (stadiumError) throw stadiumError;
+  useEffect(() => {
+    localStorage.setItem(KEYS.MATCHES, JSON.stringify(matches));
+  }, [matches]);
 
-            const mappedStadiums: Stadium[] = (stadiumData || []).map((s: any) => ({
-                id: s.id,
-                name: s.name,
-                size: s.size as StadiumSize,
-                imageUrl: s.image_url,
-                mapsUrl: s.maps_url
-            }));
+  useEffect(() => {
+    localStorage.setItem(KEYS.STADIUMS, JSON.stringify(stadiums));
+  }, [stadiums]);
 
-            // 3. Fetch Matches
-            const { data: matchData, error: matchError } = await supabase.from('matches').select('*');
-            if (matchError) throw matchError;
+  useEffect(() => {
+    localStorage.setItem(KEYS.SETTINGS, JSON.stringify(settings));
+  }, [settings]);
 
-            const mappedMatches: Match[] = (matchData || []).map((m: any) => ({
-                id: m.id,
-                date: m.date,
-                type: m.type as MatchType,
-                stadium: m.stadium as StadiumSize,
-                stadiumName: m.stadium_name,
-                youtubeLink: m.youtube_link,
-                teamAName: m.team_a_name,
-                teamBName: m.team_b_name,
-                scoreA: m.score_a,
-                scoreB: m.score_b,
-                players: m.players // JSONB column automatically parsed
-            })).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-            // 4. Fetch Settings
-            const { data: settingsData, error: settingsError } = await supabase.from('app_settings').select('config').eq('id', 1).single();
-            
-            if (settingsData && settingsData.config && Object.keys(settingsData.config).length > 0) {
-                 setSettings(prev => ({
-                    ...prev,
-                    ...settingsData.config,
-                    // Deep merge to ensure defaults exist
-                    matchTypeWeights: { ...prev.matchTypeWeights, ...(settingsData.config.matchTypeWeights || {}) },
-                    stadiumSizeWeights: { ...prev.stadiumSizeWeights, ...(settingsData.config.stadiumSizeWeights || {}) },
-                    basePoints: { ...prev.basePoints, ...(settingsData.config.basePoints || {}) }
-                 }));
-            }
-
-            setPlayers(mappedPlayers);
-            setStadiums(mappedStadiums);
-            setMatches(mappedMatches);
-
-        } catch (error) {
-            console.error("Error loading data from Supabase:", error);
-            // Fallback? Or just leave empty state.
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    fetchAllData();
-  }, []);
-
-  // -- PLAYERS --
-  const addPlayer = async (player: Player) => {
-    // Optimistic Update
+  const addPlayer = (player: Player) => {
     setPlayers(prev => [...prev, player]);
-
-    const { error } = await supabase.from('players').insert({
-        id: player.id,
-        name: player.name,
-        position: player.position,
-        avatar_url: player.avatarUrl,
-        is_external: player.isExternal
-    });
-    if (error) console.error("Error adding player:", error);
   };
 
-  const updatePlayer = async (updatedPlayer: Player) => {
+  const updatePlayer = (updatedPlayer: Player) => {
     setPlayers(prev => prev.map(p => p.id === updatedPlayer.id ? updatedPlayer : p));
-
-    const { error } = await supabase.from('players').update({
-        name: updatedPlayer.name,
-        position: updatedPlayer.position,
-        avatar_url: updatedPlayer.avatarUrl
-    }).eq('id', updatedPlayer.id);
-    if (error) console.error("Error updating player:", error);
   };
 
-  const deletePlayer = async (id: string) => {
+  const deletePlayer = (id: string) => {
     setPlayers(prev => prev.filter(p => p.id !== id));
-    const { error } = await supabase.from('players').delete().eq('id', id);
-    if (error) console.error("Error deleting player:", error);
   };
 
-  const updatePlayerAvatar = async (id: string, url: string) => {
+  const updatePlayerAvatar = (id: string, url: string) => {
     setPlayers(prev => prev.map(p => p.id === id ? { ...p, avatarUrl: url } : p));
-    const { error } = await supabase.from('players').update({ avatar_url: url }).eq('id', id);
-    if (error) console.error("Error updating avatar:", error);
   };
 
-  // -- MATCHES --
-  const addMatch = async (match: Match) => {
-    setMatches(prev => [match, ...prev]);
-
-    const { error } = await supabase.from('matches').insert({
-        id: match.id,
-        date: match.date,
-        type: match.type,
-        stadium: match.stadium,
-        stadium_name: match.stadiumName,
-        youtube_link: match.youtubeLink,
-        team_a_name: match.teamAName,
-        team_b_name: match.teamBName,
-        score_a: match.scoreA,
-        score_b: match.scoreB,
-        players: match.players // Sends array as JSONB
-    });
-    if (error) console.error("Error adding match:", error);
+  const addMatch = (match: Match) => {
+    setMatches(prev => [match, ...prev]); // Newest first
   };
 
-  const updateMatch = async (updatedMatch: Match) => {
+  const updateMatch = (updatedMatch: Match) => {
     setMatches(prev => prev.map(m => m.id === updatedMatch.id ? updatedMatch : m));
-
-    const { error } = await supabase.from('matches').update({
-        date: updatedMatch.date,
-        type: updatedMatch.type,
-        stadium: updatedMatch.stadium,
-        stadium_name: updatedMatch.stadiumName,
-        youtube_link: updatedMatch.youtubeLink,
-        team_a_name: updatedMatch.teamAName,
-        team_b_name: updatedMatch.teamBName,
-        score_a: updatedMatch.scoreA,
-        score_b: updatedMatch.scoreB,
-        players: updatedMatch.players
-    }).eq('id', updatedMatch.id);
-    if (error) console.error("Error updating match:", error);
   };
 
-  const deleteMatch = async (id: string) => {
+  const deleteMatch = (id: string) => {
     setMatches(prev => prev.filter(m => m.id !== id));
-    const { error } = await supabase.from('matches').delete().eq('id', id);
-    if (error) console.error("Error deleting match:", error);
   };
 
-  // -- STADIUMS --
-  const addStadium = async (stadium: Stadium) => {
-    setStadiums(prev => [...prev, stadium]);
-
-    const { error } = await supabase.from('stadiums').insert({
-        id: stadium.id,
-        name: stadium.name,
-        size: stadium.size,
-        image_url: stadium.imageUrl,
-        maps_url: stadium.mapsUrl
-    });
-    if (error) console.error("Error adding stadium:", error);
-  };
-
-  const updateStadium = async (updatedStadium: Stadium) => {
-    setStadiums(prev => prev.map(s => s.id === updatedStadium.id ? updatedStadium : s));
-    
-    const { error } = await supabase.from('stadiums').update({
-        name: updatedStadium.name,
-        size: updatedStadium.size,
-        image_url: updatedStadium.imageUrl,
-        maps_url: updatedStadium.mapsUrl
-    }).eq('id', updatedStadium.id);
-    if (error) console.error("Error updating stadium:", error);
-  };
-
-  const deleteStadium = async (id: string) => {
-    setStadiums(prev => prev.filter(s => s.id !== id));
-    const { error } = await supabase.from('stadiums').delete().eq('id', id);
-    if (error) console.error("Error deleting stadium:", error);
-  };
-
-  // -- SETTINGS --
-  const updateSettings = async (newSettings: AppSettings) => {
-    setSettings(newSettings);
-    
-    // Upsert settings (assumes ID 1 is the main config)
-    const { error } = await supabase.from('app_settings').upsert({
-        id: 1,
-        config: newSettings
-    });
-    if (error) console.error("Error saving settings:", error);
-  };
-
-  // -- IMPORT/RESET --
   const importData = (data: BackupData) => {
-     // NOTE: This now only updates LOCAL state. 
-     // A full Supabase import would require looping and inserting.
-     // For this "hybrid" request, we will alert the user that Import is local-only temporarily or perform a massive insert.
-     // To keep it safe: We will iterate and insert. This might be slow for large datasets.
-     
-     alert("Importing to cloud database... this may take a moment.");
+      // Restore Players (Merge strategy: ID overwrite)
+      if (data.players && Array.isArray(data.players)) {
+          setPlayers(prev => {
+              const prevMap = new Map(prev.map(p => [p.id, p]));
+              data.players.forEach(p => prevMap.set(p.id, p));
+              return Array.from(prevMap.values());
+          });
+      }
 
-     // 1. Players
-     if(data.players) {
-        data.players.forEach(p => addPlayer(p));
-     }
-     // 2. Stadiums
-     if(data.stadiums) {
-        data.stadiums.forEach(s => addStadium(s));
-     }
-     // 3. Matches
-     if(data.matches) {
-        data.matches.forEach(m => addMatch(m));
-     }
-     // 4. Settings
-     if(data.settings) {
-        updateSettings(data.settings);
-     }
+      // Restore Stadiums
+      if (data.stadiums && Array.isArray(data.stadiums)) {
+          setStadiums(prev => {
+             const prevMap = new Map(prev.map(s => [s.id, s]));
+             data.stadiums.forEach(s => prevMap.set(s.id, s));
+             return Array.from(prevMap.values());
+          });
+      }
+
+      // Restore Settings
+      if (data.settings) {
+          setSettings(prev => ({ ...prev, ...data.settings }));
+      }
+
+      // Restore Matches
+      if (data.matches && Array.isArray(data.matches)) {
+          setMatches(prev => {
+              const prevMap = new Map(prev.map(m => [m.id, m]));
+              data.matches.forEach(m => prevMap.set(m.id, m));
+              const combined = Array.from(prevMap.values());
+              // Sort newest first
+              return combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          });
+      }
   };
 
-  const resetData = async () => {
-    if(confirm("DANGER: This will wipe all data from the database. Are you sure?")) {
-        setIsLoading(true);
-        await supabase.from('matches').delete().neq('id', '0');
-        await supabase.from('players').delete().neq('id', '0');
-        await supabase.from('stadiums').delete().neq('id', '0');
-        await supabase.from('app_settings').delete().neq('id', 0);
-        
-        setPlayers([]);
+  const addStadium = (stadium: Stadium) => {
+    setStadiums(prev => [...prev, stadium]);
+  };
+
+  const updateStadium = (updatedStadium: Stadium) => {
+    setStadiums(prev => prev.map(s => s.id === updatedStadium.id ? updatedStadium : s));
+  };
+
+  const deleteStadium = (id: string) => {
+    setStadiums(prev => prev.filter(s => s.id !== id));
+  };
+
+  const updateSettings = (newSettings: AppSettings) => {
+    setSettings(newSettings);
+  };
+
+  const resetData = () => {
+    if(confirm("Are you sure? This will delete all local data and reset to defaults.")) {
+        setPlayers(INITIAL_PLAYERS);
         setMatches([]);
-        setStadiums([]);
+        setStadiums(INITIAL_STADIUMS);
         setSettings(INITIAL_SETTINGS);
-        setIsLoading(false);
+        localStorage.clear();
+        window.location.reload();
     }
   };
 
-  // -- STATS CALCULATIONS (UNCHANGED LOGIC) --
   const getPlayerStats = (playerId: string): PlayerStats => {
     const stats: PlayerStats = {
-      goals: 0, assists: 0, ownGoals: 0, cleanSheets: 0,
-      wins: 0, draws: 0, losses: 0, matchesPlayed: 0, weightedRating: 0,
+      goals: 0,
+      assists: 0,
+      ownGoals: 0,
+      cleanSheets: 0,
+      wins: 0,
+      draws: 0,
+      losses: 0,
+      matchesPlayed: 0,
+      weightedRating: 0,
     };
 
     matches.forEach(match => {
@@ -308,6 +220,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       stats.ownGoals += (pMatch.ownGoals || 0); 
       if (pMatch.isGK && pMatch.cleanSheet) stats.cleanSheets += 1;
 
+      // Result
       const isTeamA = pMatch.team === 'A';
       const myScore = isTeamA ? match.scoreA : match.scoreB;
       const oppScore = isTeamA ? match.scoreB : match.scoreA;
@@ -316,46 +229,70 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       else if (myScore === oppScore) stats.draws += 1;
       else stats.losses += 1;
 
+      // Weighted Rating Calculation
       const matchMultiplier = (settings.matchTypeWeights[match.type] || 1) * (settings.stadiumSizeWeights[match.stadium] || 1);
       
       let matchRating = 0;
       matchRating += pMatch.goals * settings.basePoints.GOAL;
       matchRating += pMatch.assists * settings.basePoints.ASSIST;
       matchRating += (pMatch.ownGoals || 0) * (settings.basePoints.OWN_GOAL || -3);
+      
       if (pMatch.isGK && pMatch.cleanSheet) matchRating += settings.basePoints.CLEAN_SHEET;
+      
       if (myScore > oppScore) matchRating += settings.basePoints.WIN;
       else if (myScore === oppScore) matchRating += settings.basePoints.DRAW;
 
       stats.weightedRating += (matchRating * matchMultiplier);
     });
+
     return stats;
   };
 
-  const getAllPlayerStats = () => players.map(p => ({ ...p, ...getPlayerStats(p.id) }));
+  const getAllPlayerStats = () => {
+    return players.map(p => ({
+      ...p,
+      ...getPlayerStats(p.id)
+    }));
+  };
 
   const getBestSynergy = (): SynergyPair[] => {
     const pairs: Map<string, SynergyPair> = new Map();
+
     matches.forEach(match => {
       const teamA = match.players.filter(p => p.team === 'A');
       const teamB = match.players.filter(p => p.team === 'B');
+
       const processTeam = (teamMembers: typeof teamA, isWin: boolean) => {
         for (let i = 0; i < teamMembers.length; i++) {
           for (let j = i + 1; j < teamMembers.length; j++) {
             const p1 = teamMembers[i].playerId;
             const p2 = teamMembers[j].playerId;
             const key = [p1, p2].sort().join('_');
+            
             if (!pairs.has(key)) {
-              pairs.set(key, { player1Id: p1 < p2 ? p1 : p2, player2Id: p1 < p2 ? p2 : p1, matchesTogether: 0, winsTogether: 0, winRate: 0 });
+              pairs.set(key, { 
+                player1Id: p1 < p2 ? p1 : p2, 
+                player2Id: p1 < p2 ? p2 : p1, 
+                matchesTogether: 0, 
+                winsTogether: 0, 
+                winRate: 0 
+              });
             }
+
             const current = pairs.get(key)!;
             current.matchesTogether += 1;
             if (isWin) current.winsTogether += 1;
           }
         }
       };
-      processTeam(teamA, match.scoreA > match.scoreB);
-      processTeam(teamB, match.scoreB > match.scoreA);
+
+      const winA = match.scoreA > match.scoreB;
+      const winB = match.scoreB > match.scoreA;
+
+      processTeam(teamA, winA);
+      processTeam(teamB, winB);
     });
+
     return Array.from(pairs.values())
       .map(pair => ({ ...pair, winRate: pair.matchesTogether > 0 ? (pair.winsTogether / pair.matchesTogether) * 100 : 0 }))
       .filter(pair => pair.matchesTogether >= 2)
@@ -364,14 +301,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   return (
     <AppContext.Provider value={{ 
-      players, matches, stadiums, settings, isLoading,
-      matchToEdit, setMatchToEdit,
-      addPlayer, updatePlayer, deletePlayer, updatePlayerAvatar,
-      addMatch, updateMatch, deleteMatch,
+      players, 
+      matches, 
+      stadiums,
+      settings,
+      matchToEdit,
+      setMatchToEdit,
+      addPlayer, 
+      updatePlayer,
+      deletePlayer,
+      updatePlayerAvatar,
+      addMatch, 
+      updateMatch,
+      deleteMatch,
       importData,
-      addStadium, updateStadium, deleteStadium,
+      addStadium,
+      updateStadium,
+      deleteStadium,
       updateSettings,
-      getPlayerStats, getAllPlayerStats, getBestSynergy, resetData
+      getPlayerStats,
+      getAllPlayerStats,
+      getBestSynergy,
+      resetData
     }}>
       {children}
     </AppContext.Provider>
