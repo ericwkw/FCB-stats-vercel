@@ -57,16 +57,16 @@ const DisciplineStats = () => {
             {/* Full Table */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
                 <div className="p-6 border-b border-gray-100 dark:border-gray-700">
-                    <h3 className="font-bold text-lg dark:text-white">Infraction Breakdown</h3>
+                    <h3 className="font-bold text-lg dark:text-white">Penalty Breakdown</h3>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full">
                         <thead className="bg-gray-50 dark:bg-gray-900/50 text-xs uppercase text-gray-500 font-medium">
                             <tr>
                                 <th className="px-6 py-4 text-left">Player</th>
-                                <th className="px-6 py-4 text-center text-orange-600"><Clock size={14} className="inline mr-1"/> Late</th>
-                                <th className="px-6 py-4 text-center text-red-500"><AlertCircle size={14} className="inline mr-1"/> Last Minute</th>
-                                <th className="px-6 py-4 text-center text-gray-400"><UserX size={14} className="inline mr-1"/> Absent</th>
+                                <th className="px-6 py-4 text-center text-orange-600"><Clock size={14} className="inline mr-1"/> Late Arrival</th>
+                                <th className="px-6 py-4 text-center text-red-500"><AlertCircle size={14} className="inline mr-1"/> Last Minute Dropout</th>
+                                <th className="px-6 py-4 text-center text-gray-400"><UserX size={14} className="inline mr-1"/> No Show</th>
                                 <th className="px-6 py-4 text-center font-bold text-gray-900 dark:text-white">Total Points</th>
                             </tr>
                         </thead>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { MatchType, StadiumSize, AgeGroup, Position, PositionEventPoints } from '../types';
+import { MatchType, StadiumSize, AgeGroup, Position, PositionEventPoints, InfractionType } from '../types';
 import { Save, RotateCcw, Settings as SettingsIcon, Database, Ruler, Users, Target } from 'lucide-react';
 import { MATCH_TYPE_WEIGHTS, STADIUM_SIZE_WEIGHTS, BASE_POINTS, AGE_GROUP_MULTIPLIERS, POSITION_POINTS } from '../constants';
 import { useToast } from '../context/ToastContext';
@@ -64,6 +64,10 @@ const Settings: React.FC = () => {
     setLocalSettings(prev => ({ ...prev, basePoints: { ...prev.basePoints, [key]: parseFloat(val) || 0 } }));
   };
 
+  const updateInfractionPoint = (type: InfractionType, val: string) => {
+    setLocalSettings(prev => ({ ...prev, infractionPoints: { ...prev.infractionPoints, [type]: parseFloat(val) || 0 } }));
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-fade-in pb-12 relative">
       
@@ -99,7 +103,7 @@ const Settings: React.FC = () => {
                     <div className="space-y-6">
                         <div>
                             <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Match Difficulty</h4>
-                            <p className="text-xs text-gray-400 mb-3">Multiplier applied to the total rating based on match type.</p>
+                            <p className="text-xs text-gray-400 mb-3">How tough was this match? We multiply the final rating to reward playing in harder games.</p>
                             <div className="space-y-3">
                                 {Object.values(MatchType).map((type) => (
                                     <div key={type} className="flex justify-between items-center">
@@ -114,9 +118,12 @@ const Settings: React.FC = () => {
                                 ))}
                             </div>
                         </div>
+
+                        <hr className="border-gray-100 dark:border-gray-700" />
+
                         <div>
                             <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Pitch Size</h4>
-                            <p className="text-xs text-gray-400 mb-3">Multiplier for field size. Larger pitches = higher stamina demand.</p>
+                            <p className="text-xs text-gray-400 mb-3">Big pitches are tiring! We boost the rating for matches played on larger fields.</p>
                             <div className="space-y-3">
                                 {Object.values(StadiumSize).map((size) => (
                                     <div key={size} className="flex justify-between items-center">
@@ -131,11 +138,14 @@ const Settings: React.FC = () => {
                                 ))}
                             </div>
                         </div>
+
+                        <hr className="border-gray-100 dark:border-gray-700" />
+
                         <div>
                             <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-2">
                                 <Users size={14} /> Age Group Multipliers
                             </h4>
-                            <p className="text-xs text-gray-400 mb-3">Handicap multiplier to balance performance across ages.</p>
+                            <p className="text-xs text-gray-400 mb-3">To keep things fair, we give a little rating boost to older age groups.</p>
                             <div className="space-y-3">
                                 {Object.values(AgeGroup).map((age) => (
                                     <div key={age} className="flex justify-between items-center">
@@ -164,7 +174,7 @@ const Settings: React.FC = () => {
                         </button>
                     </div>
                     
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 -mt-4">Points awarded for specific actions based on the player's role in the match.</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 -mt-4">Different roles, different rewards. Set how many points each position gets for goals, assists, and clean sheets.</p>
 
                     <div className="space-y-8">
                         {Object.values(Position).map((pos) => (
@@ -205,7 +215,7 @@ const Settings: React.FC = () => {
 
                     <div className="mt-8 pt-6 border-t dark:border-gray-700">
                          <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Global Events</h4>
-                         <p className="text-xs text-gray-400 mb-3">Base points applied to all players regardless of position.</p>
+                         <p className="text-xs text-gray-400 mb-3">Points that apply to everyone, regardless of where they play.</p>
                          <div className="flex justify-between items-center">
                             <label className="font-medium text-red-600 dark:text-red-400">Own Goal Penalty</label>
                             <input 
@@ -233,6 +243,40 @@ const Settings: React.FC = () => {
                                 className="w-20 p-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-right font-mono dark:text-white outline-none"
                             />
                         </div>
+                    </div>
+
+                    <div className="mt-8 pt-6 border-t dark:border-gray-700">
+                         <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Discipline Penalties</h4>
+                         <p className="text-xs text-gray-400 mb-3">Points deducted for being late or missing a game. Keep the squad disciplined!</p>
+                         <div className="space-y-3">
+                            <div className="flex justify-between items-center">
+                                <label className="font-medium text-red-600 dark:text-red-400">Late Arrival</label>
+                                <input 
+                                    type="number"
+                                    value={localSettings.infractionPoints[InfractionType.LATE]}
+                                    onChange={(e) => updateInfractionPoint(InfractionType.LATE, e.target.value)}
+                                    className="w-20 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900 rounded-lg text-right font-mono text-red-700 dark:text-red-400 outline-none"
+                                />
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <label className="font-medium text-red-600 dark:text-red-400">Last Minute Dropout</label>
+                                <input 
+                                    type="number"
+                                    value={localSettings.infractionPoints[InfractionType.LAST_MINUTE]}
+                                    onChange={(e) => updateInfractionPoint(InfractionType.LAST_MINUTE, e.target.value)}
+                                    className="w-20 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900 rounded-lg text-right font-mono text-red-700 dark:text-red-400 outline-none"
+                                />
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <label className="font-medium text-red-600 dark:text-red-400">No Show</label>
+                                <input 
+                                    type="number"
+                                    value={localSettings.infractionPoints[InfractionType.ABSENCE]}
+                                    onChange={(e) => updateInfractionPoint(InfractionType.ABSENCE, e.target.value)}
+                                    className="w-20 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900 rounded-lg text-right font-mono text-red-700 dark:text-red-400 outline-none"
+                                />
+                            </div>
+                         </div>
                     </div>
                 </div>
             </div>

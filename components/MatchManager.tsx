@@ -150,8 +150,31 @@ const MatchManager: React.FC<MatchManagerProps> = ({ onCancel }) => {
   const totalScoreA = teamAGoalsFromPlayers + teamBOwnGoals + otherGoalsA;
   const totalScoreB = teamBGoalsFromPlayers + teamAOwnGoals + otherGoalsB;
 
+  // Validation Logic
   const showAssistWarningA = teamAAssists > totalScoreA;
   const showAssistWarningB = teamBAssists > totalScoreB;
+
+  // Check for Self-Assist: If a player has goals & assists, ensure team total > player goals
+  // Logic: A player cannot assist themselves. If they have 1 goal and 1 assist, there must be at least 2 goals.
+  // Actually, simpler: If a player has > 0 assists, there must be at least (player.goals + 1) goals in the team?
+  // No, if Player A scores 1 and assists 1 (for Player B), total goals = 2.
+  // If Player A scores 2 and assists 1 (for Player B), total goals = 3.
+  // If Player A scores 1 and assists 0, total goals = 1.
+  // So, if player.assists > 0, they must have assisted SOMEONE ELSE.
+  // Thus, totalTeamGoals must be > player.goals.
+  // If totalTeamGoals == player.goals, and player.assists > 0, it means they assisted themselves (impossible) or assisted a ghost (impossible).
+  const selfAssistWarningPlayers = selectedPlayers.filter(p => {
+      const stats = playerPerformances[p.id];
+      const teamTotal = p.team === 'A' ? totalScoreA : totalScoreB;
+      return stats && stats.goals > 0 && stats.assists > 0 && teamTotal <= stats.goals;
+  });
+
+  // Check for Invalid Clean Sheet: Clean sheet checked but opponent scored
+  const invalidCleanSheetPlayers = selectedPlayers.filter(p => {
+      const stats = playerPerformances[p.id];
+      const opponentScore = p.team === 'A' ? totalScoreB : totalScoreA;
+      return stats && stats.cleanSheet && opponentScore > 0;
+  });
 
   const handleVenueChange = (val: string) => {
     setSelectedStadiumId(val);
@@ -224,12 +247,29 @@ const MatchManager: React.FC<MatchManagerProps> = ({ onCancel }) => {
   const handleAddInfraction = () => {
       if (!infractionPlayerId) return;
 
+      // Check if player already has an infraction
+      const existingInfraction = currentInfractions.find(i => i.playerId === infractionPlayerId);
+      if (existingInfraction) {
+          showToast("This player already has a recorded issue for this match.", "error");
+          return;
+      }
+
       // Validation: Check if player is in the squad
       const isParticipating = selectedPlayers.some(p => p.id === infractionPlayerId);
 
-      if (infractionType === InfractionType.ABSENCE && isParticipating) {
-          showToast("Cannot mark a participating player as Absent. Please remove them from the squad first.", "error");
-          return;
+      // Rule 1: Participating players can only be LATE
+      if (isParticipating) {
+          if (infractionType !== InfractionType.LATE) {
+               showToast("Active players can only be marked as 'Late'. If they dropped out, remove them from the squad first.", "error");
+               return;
+          }
+      } 
+      // Rule 2: Non-participating players cannot be LATE
+      else {
+          if (infractionType === InfractionType.LATE) {
+              showToast("A player must be in the squad to be marked as 'Late'.", "error");
+              return;
+          }
       }
 
       setCurrentInfractions(prev => [...prev, { playerId: infractionPlayerId, type: infractionType }]);
@@ -241,6 +281,18 @@ const MatchManager: React.FC<MatchManagerProps> = ({ onCancel }) => {
   };
 
   const handleFinishMatch = () => {
+    // Validation
+    if (selfAssistWarningPlayers.length > 0) {
+        const names = selfAssistWarningPlayers.map(p => players.find(pl => pl.id === p.id)?.name).join(', ');
+        showToast(`Logic Error: ${names} cannot assist their own goal.`, "error");
+        return;
+    }
+    if (invalidCleanSheetPlayers.length > 0) {
+        const names = invalidCleanSheetPlayers.map(p => players.find(pl => pl.id === p.id)?.name).join(', ');
+        showToast(`Logic Error: ${names} cannot have a Clean Sheet because the team conceded goals.`, "error");
+        return;
+    }
+
     const combinedDate = new Date(`${matchDate}T${matchTime}`);
 
     const matchPlayers: MatchPlayerStats[] = selectedPlayers.map(sp => ({
@@ -648,10 +700,10 @@ const MatchManager: React.FC<MatchManagerProps> = ({ onCancel }) => {
             <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-2 mb-4 text-red-600 dark:text-red-400">
                     <Gavel size={24} />
-                    <h3 className="font-bold text-xl">Discipline & Infractions</h3>
+                    <h3 className="font-bold text-xl">Discipline & Penalties</h3>
                 </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                    Record late arrivals, last-minute registrations, or absences. These accumulate points for the "Breakfast Club" penalty.
+                    Track who was late, who dropped out last minute, or who didn't show up. These affect the "Breakfast Club" standings.
                 </p>
 
                 <div className="flex flex-col md:flex-row gap-4 mb-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
@@ -669,15 +721,15 @@ const MatchManager: React.FC<MatchManagerProps> = ({ onCancel }) => {
                         </select>
                     </div>
                     <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Infraction</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Issue Type</label>
                         <select 
                             className="w-full p-2.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 dark:text-white"
                             value={infractionType}
                             onChange={(e) => setInfractionType(e.target.value as InfractionType)}
                         >
-                            {Object.values(InfractionType).map(t => (
-                                <option key={t} value={t}>{t.replace('_', ' ')}</option>
-                            ))}
+                            <option value={InfractionType.LATE}>Late Arrival</option>
+                            <option value={InfractionType.LAST_MINUTE}>Last Minute Dropout</option>
+                            <option value={InfractionType.ABSENCE}>No Show</option>
                         </select>
                     </div>
                     <div className="flex items-end">
@@ -695,13 +747,21 @@ const MatchManager: React.FC<MatchManagerProps> = ({ onCancel }) => {
                     <div className="space-y-2">
                         {currentInfractions.map((inf, idx) => {
                             const p = players.find(x => x.id === inf.playerId);
+                            let label = '';
+                            switch(inf.type) {
+                                case InfractionType.LATE: label = 'Late Arrival'; break;
+                                case InfractionType.LAST_MINUTE: label = 'Last Minute Dropout'; break;
+                                case InfractionType.ABSENCE: label = 'No Show'; break;
+                                default: label = inf.type;
+                            }
+                            
                             return (
                                 <div key={idx} className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-800 rounded-lg">
                                     <div className="flex items-center gap-3">
                                         <img src={p?.avatarUrl} className="w-8 h-8 rounded-full bg-gray-200" alt={p?.name} />
                                         <div>
                                             <span className="font-bold dark:text-white block">{p?.name || 'Unknown'}</span>
-                                            <span className="text-xs text-red-600 dark:text-red-400 font-bold uppercase">{inf.type.replace('_', ' ')}</span>
+                                            <span className="text-xs text-red-600 dark:text-red-400 font-bold uppercase">{label}</span>
                                         </div>
                                     </div>
                                     <button 
@@ -715,18 +775,24 @@ const MatchManager: React.FC<MatchManagerProps> = ({ onCancel }) => {
                         })}
                     </div>
                 ) : (
-                    <div className="text-center py-4 text-gray-400 italic text-sm">No infractions recorded for this match.</div>
+                    <div className="text-center py-4 text-gray-400 italic text-sm">No issues recorded for this match.</div>
                 )}
             </div>
 
-            {(showAssistWarningA || showAssistWarningB) && (
+            {(showAssistWarningA || showAssistWarningB || selfAssistWarningPlayers.length > 0 || invalidCleanSheetPlayers.length > 0) && (
                 <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-xl flex items-start gap-3 mb-6 animate-fade-in">
                     <AlertTriangle className="text-yellow-600 dark:text-yellow-400 mt-1" size={20} />
                     <div>
-                        <h4 className="font-bold text-yellow-800 dark:text-yellow-300">Assist Logic Warning</h4>
+                        <h4 className="font-bold text-yellow-800 dark:text-yellow-300">Logic Check</h4>
                         <div className="text-sm text-yellow-700 dark:text-yellow-400/80 space-y-1">
                             {showAssistWarningA && <div>• {teamAName} has more assists ({teamAAssists}) than goals ({totalScoreA}).</div>}
                             {showAssistWarningB && <div>• {teamBName} has more assists ({teamBAssists}) than goals ({totalScoreB}).</div>}
+                            {selfAssistWarningPlayers.length > 0 && (
+                                <div>• <strong>Self-Assist Error:</strong> A player cannot assist their own goal ({selfAssistWarningPlayers.length} flagged).</div>
+                            )}
+                            {invalidCleanSheetPlayers.length > 0 && (
+                                <div>• <strong>Clean Sheet Error:</strong> Team conceded goals, so Clean Sheet is invalid ({invalidCleanSheetPlayers.length} flagged).</div>
+                            )}
                             <div className="mt-2 text-xs font-medium opacity-80">Note: An assist is only awarded if it directly leads to a goal.</div>
                         </div>
                     </div>
