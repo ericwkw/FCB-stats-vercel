@@ -11,10 +11,11 @@ import MatchHistory from './components/MatchHistory';
 import ImportData from './components/ImportData';
 import Settings from './components/Settings';
 import StatsComparison from './components/StatsComparison';
+import DisciplineStats from './components/DisciplineStats';
 
 // Wrapper component to access context for navigation logic
 const AppContent = () => {
-  const { setMatchToEdit } = useApp();
+  const { setMatchToEdit, matchToEdit } = useApp();
   const [activeTab, setActiveTab] = useState('overview');
 
   // Enhanced navigation handler to ensure state consistency
@@ -40,9 +41,10 @@ const AppContent = () => {
       case 'overview': return <Overview onNavigate={handleTabChange} />;
       case 'dashboard': return <Dashboard />;
       case 'stats': return <StatsComparison />;
+      case 'discipline': return <DisciplineStats />;
       case 'players': return <PlayerList />;
       case 'venues': return <VenueManager />;
-      case 'matches': return <MatchManager onCancel={handleCancelEdit} />;
+      case 'matches': return <MatchManager key={matchToEdit?.id || 'new'} onCancel={handleCancelEdit} />;
       case 'history': return <MatchHistory onEdit={handleEditMatch} />;
       case 'import': return <ImportData />;
       case 'settings': return <Settings />;

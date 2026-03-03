@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { Player, PlayerStats, Position } from '../types';
-import { ArrowUpDown, ArrowUp, ArrowDown, Shield, Trophy, Medal, AlertCircle } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, Trophy, Medal, AlertCircle, Info } from 'lucide-react';
 import PlayerProfile from './PlayerProfile';
 
 type SortKey = keyof PlayerStats | 'name' | 'winRate';
@@ -130,14 +130,21 @@ const StatsComparison: React.FC = () => {
                         <div className="flex items-center justify-end gap-1">Win % {getSortIcon('winRate')}</div>
                      </th>
                      <th className="p-4 font-medium cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors text-right w-40" onClick={() => handleSort('weightedRating')}>
-                        <div className="flex items-center justify-end gap-1">Rating {getSortIcon('weightedRating')}</div>
+                        <div className="flex items-center justify-end gap-1">
+                            Rating {getSortIcon('weightedRating')}
+                            <div className="relative group ml-1" onClick={(e) => e.stopPropagation()}>
+                                <Info size={12} className="text-gray-400 hover:text-pitch-600" />
+                                <div className="absolute right-0 top-full mt-2 w-48 p-2 bg-black/90 text-xs text-white rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 font-normal normal-case text-center">
+                                    Weighted based on position, age, and match difficulty.
+                                </div>
+                            </div>
+                        </div>
                      </th>
                   </tr>
                </thead>
                <tbody className="divide-y divide-gray-100 dark:divide-gray-700 text-sm">
                   {sortedData.map((player, idx) => {
                      const winRate = player.matchesPlayed > 0 ? (player.wins / player.matchesPlayed) * 100 : 0;
-                     const isTopRating = sortConfig.key === 'weightedRating' && idx < 3;
                      const rank = idx + 1;
 
                      return (

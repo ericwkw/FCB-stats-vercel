@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Position, Player } from '../types';
+import { Position, Player, AgeGroup } from '../types';
 import { generatePlayerAvatar } from '../services/genai';
 import { compressBase64 } from '../utils/image';
 import { UserPlus, Sparkles, Shirt, LayoutGrid, List, Search, Trash2, Edit2, AlertTriangle, X, Activity } from 'lucide-react';
@@ -18,6 +18,7 @@ const PlayerList: React.FC = () => {
   
   const [formName, setFormName] = useState('');
   const [formPosition, setFormPosition] = useState<Position>(Position.MF);
+  const [formAgeGroup, setFormAgeGroup] = useState<AgeGroup>(AgeGroup.TWENTIES);
   
   // Delete Modal State
   const [playerToDelete, setPlayerToDelete] = useState<Player | null>(null);
@@ -38,6 +39,7 @@ const PlayerList: React.FC = () => {
       setModalMode('add');
       setFormName('');
       setFormPosition(Position.MF);
+      setFormAgeGroup(AgeGroup.TWENTIES);
       setEditingId(null);
       setIsModalOpen(true);
   };
@@ -46,6 +48,7 @@ const PlayerList: React.FC = () => {
       setModalMode('edit');
       setFormName(player.name);
       setFormPosition(player.position);
+      setFormAgeGroup(player.ageGroup || AgeGroup.TWENTIES);
       setEditingId(player.id);
       setIsModalOpen(true);
   };
@@ -64,6 +67,7 @@ const PlayerList: React.FC = () => {
             id: Date.now().toString(),
             name: formName,
             position: formPosition,
+            ageGroup: formAgeGroup,
             avatarUrl: avatarUrl
         };
         addPlayer(newPlayer);
@@ -75,7 +79,8 @@ const PlayerList: React.FC = () => {
                 updatePlayer({
                     ...existing,
                     name: formName,
-                    position: formPosition
+                    position: formPosition,
+                    ageGroup: formAgeGroup
                 });
                 showToast('Player details updated.', 'success');
             }
@@ -270,6 +275,11 @@ const PlayerList: React.FC = () => {
                                     {player.position}
                                 </span>
                             </div>
+                            <div className="absolute bottom-2 left-2">
+                                <span className="bg-black/50 backdrop-blur-sm text-white border border-white/20 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm">
+                                    {player.ageGroup || 'N/A'}
+                                </span>
+                            </div>
                             {/* Hover Overlay Actions */}
                             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3">
                                 
@@ -331,6 +341,7 @@ const PlayerList: React.FC = () => {
                                <tr>
                                   <th className="p-4 font-medium">Player</th>
                                   <th className="p-4 font-medium">Position</th>
+                                  <th className="p-4 font-medium">Age Group</th>
                                   <th className="p-4 font-medium">ID</th>
                                   <th className="p-4 font-medium text-right">Actions</th>
                                </tr>
@@ -348,6 +359,9 @@ const PlayerList: React.FC = () => {
                                         <span className={`${positionColor(player.position)} px-2 py-1 rounded-full text-xs font-bold uppercase`}>
                                            {player.position}
                                         </span>
+                                     </td>
+                                     <td className="p-4 text-gray-600 dark:text-gray-300 text-sm">
+                                        {player.ageGroup || 'N/A'}
                                      </td>
                                      <td className="p-4 text-gray-500 dark:text-gray-400 font-mono text-sm">
                                         #{player.id.slice(-4)}
@@ -422,17 +436,31 @@ const PlayerList: React.FC = () => {
                   onChange={(e) => setFormName(e.target.value)}
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Position</label>
-                <select
-                  className="w-full p-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-pitch-500 outline-none dark:text-white transition-all"
-                  value={formPosition}
-                  onChange={(e) => setFormPosition(e.target.value as Position)}
-                >
-                  {Object.values(Position).map((pos) => (
-                    <option key={pos} value={pos}>{pos}</option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Position</label>
+                    <select
+                    className="w-full p-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-pitch-500 outline-none dark:text-white transition-all"
+                    value={formPosition}
+                    onChange={(e) => setFormPosition(e.target.value as Position)}
+                    >
+                    {Object.values(Position).map((pos) => (
+                        <option key={pos} value={pos}>{pos}</option>
+                    ))}
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Age Group</label>
+                    <select
+                    className="w-full p-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-pitch-500 outline-none dark:text-white transition-all"
+                    value={formAgeGroup}
+                    onChange={(e) => setFormAgeGroup(e.target.value as AgeGroup)}
+                    >
+                    {Object.values(AgeGroup).map((age) => (
+                        <option key={age} value={age}>{age}</option>
+                    ))}
+                    </select>
+                </div>
               </div>
               <div className="flex gap-3 mt-6">
                 <button

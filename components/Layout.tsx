@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Users, Calendar, FileText, Settings, Moon, Sun, History, BarChart2, Home, MapPin, Coffee } from 'lucide-react';
+import { Trophy, Users, Calendar, FileText, Settings, Moon, Sun, History, BarChart2, Home, MapPin, Coffee, Gavel } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -8,12 +8,25 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) => {
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof document !== 'undefined') {
+      return document.documentElement.classList.contains('dark');
+    }
+    return false;
+  });
 
   useEffect(() => {
-    if (document.documentElement.classList.contains('dark')) {
-      setIsDark(true);
-    }
+    // Sync state if class changes externally (optional, but good practice)
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class') {
+            setIsDark(document.documentElement.classList.contains('dark'));
+        }
+      });
+    });
+    
+    observer.observe(document.documentElement, { attributes: true });
+    return () => observer.disconnect();
   }, []);
 
   const toggleTheme = () => {
@@ -40,6 +53,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab }) =>
       label: "Analytics",
       items: [
         { id: 'stats', label: 'Stats Comparison', icon: BarChart2 },
+        { id: 'discipline', label: 'Discipline', icon: Gavel },
         { id: 'history', label: 'Match History', icon: History },
       ]
     },
