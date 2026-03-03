@@ -83,36 +83,34 @@ const Overview: React.FC<OverviewProps> = ({ onNavigate }) => {
 
       {/* Logic Explanation */}
       <div className="bg-gray-50 dark:bg-gray-800/50 p-6 md:p-8 rounded-2xl border border-gray-200 dark:border-gray-700">
-        <h2 className="text-xl font-bold dark:text-white mb-4">The Math Behind The Ratings</h2>
+        <h2 className="text-xl font-bold dark:text-white mb-4">How We Calculate Your Rating</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm text-gray-600 dark:text-gray-300">
            <ul className="space-y-3">
              <li className="flex items-start gap-2">
                <Target size={16} className="mt-1 text-pitch-500" />
-               <span><strong>Position-Based Scoring:</strong> Points for Goals, Assists, and Clean Sheets are customized by position. For example, a Defender scoring a goal earns more points than a Forward.</span>
+               <span><strong>Fair Scoring:</strong> A Defender scoring a goal is a bigger deal than a Striker doing it. We award points differently based on your position.</span>
              </li>
              <li className="flex items-start gap-2">
                <BarChart2 size={16} className="mt-1 text-pitch-500" />
-               <span><strong>Weighted Rating Formula:</strong><br/>
-               <code className="bg-white/50 dark:bg-black/20 px-1 py-0.5 rounded mt-1 inline-block text-xs">Rating = (Base Points) × (Match Difficulty) × (Stadium Size) × (Age Group)</code>
-               </span>
+               <span><strong>The Formula:</strong> We take your base points and multiply them by the match difficulty, pitch size, and your age group.</span>
              </li>
              <li className="flex items-start gap-2">
                <Shield size={16} className="mt-1 text-pitch-500" />
-               <span><strong>Defensive Value:</strong> Clean Sheet points are awarded based on position (typically GK and DF). Own Goals incur a penalty of {settings.basePoints.OWN_GOAL} pts.</span>
+               <span><strong>Defense Matters:</strong> Goalkeepers and Defenders get big points for Clean Sheets. But watch out—Own Goals will cost you {settings.basePoints.OWN_GOAL} points!</span>
              </li>
            </ul>
            <ul className="space-y-3">
              <li className="flex items-start gap-2">
                <Trophy size={16} className="mt-1 text-pitch-500" />
-               <span><strong>Win Bonuses:</strong> Winning a match grants a flat +{settings.basePoints.WIN} bonus to everyone on the team. Draws grant +{settings.basePoints.DRAW}.</span>
+               <span><strong>Teamwork Pays Off:</strong> If your team wins, everyone gets a +{settings.basePoints.WIN} point bonus. A draw gets you +{settings.basePoints.DRAW}.</span>
              </li>
              <li className="flex items-start gap-2">
                <Users size={16} className="mt-1 text-pitch-500" />
-               <span><strong>Age Group Scaling:</strong> Performance is weighted by age group to level the playing field. (e.g. U20: x{settings.ageGroupMultipliers.U20}, 40+: x{settings.ageGroupMultipliers['40+']})</span>
+               <span><strong>Age Adjustments:</strong> To keep the playing field level, we apply a small multiplier based on age groups (e.g. U20s or 40+ veterans).</span>
              </li>
              <li className="flex items-start gap-2">
                <MapPin size={16} className="mt-1 text-pitch-500" />
-               <span><strong>Context Matters:</strong> Matches are weighted by importance (Friendly vs Challenger) and pitch size (Small vs Large).</span>
+               <span><strong>Context is Key:</strong> A competitive match on a full-size pitch is worth more than a casual kickabout on a small field.</span>
              </li>
            </ul>
         </div>
