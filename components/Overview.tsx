@@ -88,21 +88,31 @@ const Overview: React.FC<OverviewProps> = ({ onNavigate }) => {
            <ul className="space-y-3">
              <li className="flex items-start gap-2">
                <Target size={16} className="mt-1 text-pitch-500" />
-               <span><strong>Weighted Scoring:</strong> Goals are multiplied by match difficulty (e.g. x{settings.matchTypeWeights.CHALLENGER} for Challengers) and pitch size (e.g. x{settings.stadiumSizeWeights.LARGE} for Large).</span>
+               <span><strong>Position-Based Scoring:</strong> Points for Goals, Assists, and Clean Sheets are customized by position. For example, a Defender scoring a goal earns more points than a Forward.</span>
+             </li>
+             <li className="flex items-start gap-2">
+               <BarChart2 size={16} className="mt-1 text-pitch-500" />
+               <span><strong>Weighted Rating Formula:</strong><br/>
+               <code className="bg-white/50 dark:bg-black/20 px-1 py-0.5 rounded mt-1 inline-block text-xs">Rating = (Base Points) × (Match Difficulty) × (Stadium Size) × (Age Group)</code>
+               </span>
              </li>
              <li className="flex items-start gap-2">
                <Shield size={16} className="mt-1 text-pitch-500" />
-               <span><strong>Defensive Value:</strong> Goalkeepers earn {settings.basePoints.CLEAN_SHEET} pts for Clean Sheets. Everyone loses {Math.abs(settings.basePoints.OWN_GOAL)} pts for Own Goals.</span>
+               <span><strong>Defensive Value:</strong> Clean Sheet points are awarded based on position (typically GK and DF). Own Goals incur a penalty of {settings.basePoints.OWN_GOAL} pts.</span>
              </li>
            </ul>
            <ul className="space-y-3">
              <li className="flex items-start gap-2">
                <Trophy size={16} className="mt-1 text-pitch-500" />
-               <span><strong>Win Bonuses:</strong> Winning a match grants a flat +{settings.basePoints.WIN} bonus to everyone on the team, regardless of individual stats.</span>
+               <span><strong>Win Bonuses:</strong> Winning a match grants a flat +{settings.basePoints.WIN} bonus to everyone on the team. Draws grant +{settings.basePoints.DRAW}.</span>
              </li>
              <li className="flex items-start gap-2">
                <Users size={16} className="mt-1 text-pitch-500" />
-               <span><strong>Synergy:</strong> The app tracks which pairs of players win the most often when playing on the same side.</span>
+               <span><strong>Age Group Scaling:</strong> Performance is weighted by age group to level the playing field. (e.g. U20: x{settings.ageGroupMultipliers.U20}, 40+: x{settings.ageGroupMultipliers['40+']})</span>
+             </li>
+             <li className="flex items-start gap-2">
+               <MapPin size={16} className="mt-1 text-pitch-500" />
+               <span><strong>Context Matters:</strong> Matches are weighted by importance (Friendly vs Challenger) and pitch size (Small vs Large).</span>
              </li>
            </ul>
         </div>

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Player, Match, MatchType, StadiumSize, Position, PlayerStats, SynergyPair, AppSettings, Stadium, BackupData } from '../types';
-import { MATCH_TYPE_WEIGHTS, STADIUM_SIZE_WEIGHTS, BASE_POINTS } from '../constants';
+import { Player, Match, StadiumSize, Position, PlayerStats, SynergyPair, AppSettings, Stadium, BackupData, AgeGroup, InfractionType, DisciplineStat } from '../types';
+import { MATCH_TYPE_WEIGHTS, STADIUM_SIZE_WEIGHTS, BASE_POINTS, AGE_GROUP_MULTIPLIERS, INFRACTION_POINTS, POSITION_POINTS } from '../constants';
 
 interface AppContextType {
   players: Player[];
@@ -24,6 +24,7 @@ interface AppContextType {
   getPlayerStats: (playerId: string) => PlayerStats;
   getAllPlayerStats: () => (Player & PlayerStats)[];
   getBestSynergy: () => SynergyPair[];
+  getDisciplineStats: () => DisciplineStat[];
   resetData: () => void;
 }
 
@@ -31,10 +32,10 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // Initial Mock Data
 const INITIAL_PLAYERS: Player[] = [
-  { id: '1', name: 'Tsubasa', position: Position.MF, avatarUrl: 'https://randomuser.me/api/portraits/men/32.jpg' },
-  { id: '2', name: 'Hyuga', position: Position.FW, avatarUrl: 'https://randomuser.me/api/portraits/men/86.jpg' },
-  { id: '3', name: 'Wakabayashi', position: Position.GK, avatarUrl: 'https://randomuser.me/api/portraits/men/11.jpg' },
-  { id: '4', name: 'Misaki', position: Position.MF, avatarUrl: 'https://randomuser.me/api/portraits/men/64.jpg' },
+  { id: '1', name: 'Tsubasa', position: Position.MF, ageGroup: AgeGroup.U20, avatarUrl: 'https://randomuser.me/api/portraits/men/32.jpg' },
+  { id: '2', name: 'Hyuga', position: Position.FW, ageGroup: AgeGroup.TWENTIES, avatarUrl: 'https://randomuser.me/api/portraits/men/86.jpg' },
+  { id: '3', name: 'Wakabayashi', position: Position.GK, ageGroup: AgeGroup.TWENTIES, avatarUrl: 'https://randomuser.me/api/portraits/men/11.jpg' },
+  { id: '4', name: 'Misaki', position: Position.MF, ageGroup: AgeGroup.THIRTIES, avatarUrl: 'https://randomuser.me/api/portraits/men/64.jpg' },
 ];
 
 const INITIAL_STADIUMS: Stadium[] = [
@@ -46,6 +47,9 @@ const INITIAL_STADIUMS: Stadium[] = [
 const INITIAL_SETTINGS: AppSettings = {
     matchTypeWeights: { ...MATCH_TYPE_WEIGHTS },
     stadiumSizeWeights: { ...STADIUM_SIZE_WEIGHTS },
+    ageGroupMultipliers: { ...AGE_GROUP_MULTIPLIERS },
+    infractionPoints: { ...INFRACTION_POINTS },
+    positionPoints: { ...POSITION_POINTS },
     basePoints: { ...BASE_POINTS }
 };
 
@@ -83,6 +87,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           ...stored,
           matchTypeWeights: { ...INITIAL_SETTINGS.matchTypeWeights, ...stored.matchTypeWeights },
           stadiumSizeWeights: { ...INITIAL_SETTINGS.stadiumSizeWeights, ...stored.stadiumSizeWeights },
+          ageGroupMultipliers: { ...INITIAL_SETTINGS.ageGroupMultipliers, ...stored.ageGroupMultipliers },
+          infractionPoints: { ...INITIAL_SETTINGS.infractionPoints, ...stored.infractionPoints },
+          positionPoints: { ...INITIAL_SETTINGS.positionPoints, ...stored.positionPoints },
           basePoints: { ...INITIAL_SETTINGS.basePoints, ...stored.basePoints }
       };
   });
@@ -210,6 +217,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       weightedRating: 0,
     };
 
+    const player = players.find(p => p.id === playerId);
+    const ageMultiplier = player ? (settings.ageGroupMultipliers[player.ageGroup] || 1) : 1;
+
     matches.forEach(match => {
       const pMatch = match.players.find(p => p.playerId === playerId);
       if (!pMatch) return;
@@ -232,17 +242,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Weighted Rating Calculation
       const matchMultiplier = (settings.matchTypeWeights[match.type] || 1) * (settings.stadiumSizeWeights[match.stadium] || 1);
       
+      // Determine position for this match (fallback to player default)
+      const playedPosition = pMatch.position || player?.position || Position.MF;
+      const posPoints = settings.positionPoints[playedPosition] || POSITION_POINTS[Position.MF];
+
       let matchRating = 0;
-      matchRating += pMatch.goals * settings.basePoints.GOAL;
-      matchRating += pMatch.assists * settings.basePoints.ASSIST;
+      
+      // Use position-specific points
+      matchRating += pMatch.goals * posPoints.GOAL;
+      matchRating += pMatch.assists * posPoints.ASSIST;
+      
+      // Own goals and Win/Draw still use base points for now unless requested otherwise
       matchRating += (pMatch.ownGoals || 0) * (settings.basePoints.OWN_GOAL || -3);
       
-      if (pMatch.isGK && pMatch.cleanSheet) matchRating += settings.basePoints.CLEAN_SHEET;
+      if (pMatch.cleanSheet) {
+          // Only give clean sheet points if defined for position (e.g. GK/DF)
+          matchRating += posPoints.CLEAN_SHEET;
+      }
       
       if (myScore > oppScore) matchRating += settings.basePoints.WIN;
       else if (myScore === oppScore) matchRating += settings.basePoints.DRAW;
 
-      stats.weightedRating += (matchRating * matchMultiplier);
+      // Apply Age Multiplier
+      stats.weightedRating += (matchRating * matchMultiplier * ageMultiplier);
     });
 
     return stats;
@@ -299,6 +321,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       .sort((a, b) => b.winRate - a.winRate);
   };
 
+  const getDisciplineStats = (): DisciplineStat[] => {
+    const stats: Map<string, DisciplineStat> = new Map();
+
+    // Initialize for all players
+    players.forEach(p => {
+        stats.set(p.id, {
+            player: p,
+            points: 0,
+            breakdown: {
+                [InfractionType.LATE]: 0,
+                [InfractionType.LAST_MINUTE]: 0,
+                [InfractionType.ABSENCE]: 0
+            }
+        });
+    });
+
+    matches.forEach(m => {
+        if (m.infractions) {
+            m.infractions.forEach(inf => {
+                const stat = stats.get(inf.playerId);
+                if (stat) {
+                    const points = settings.infractionPoints[inf.type] || 0;
+                    stat.points += points;
+                    stat.breakdown[inf.type] += 1;
+                }
+            });
+        }
+    });
+
+    return Array.from(stats.values())
+        .filter(s => s.points > 0)
+        .sort((a, b) => b.points - a.points);
+  };
+
   return (
     <AppContext.Provider value={{ 
       players, 
@@ -322,6 +378,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       getPlayerStats,
       getAllPlayerStats,
       getBestSynergy,
+      getDisciplineStats,
       resetData
     }}>
       {children}

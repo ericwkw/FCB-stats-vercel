@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Match, MatchType, StadiumSize, MatchPlayerStats, Position } from '../types';
-import { Save, Search, Calendar, Clock, LayoutGrid, List, PlusCircle, MinusCircle, HelpCircle, Youtube, Edit2, Users, ArrowLeft, AlertTriangle, UserX, X } from 'lucide-react';
+import { Match, MatchType, StadiumSize, MatchPlayerStats, Position, InfractionType, MatchInfraction } from '../types';
+import { Save, Search, Calendar, Clock, LayoutGrid, List, PlusCircle, MinusCircle, Youtube, Edit2, Users, ArrowLeft, AlertTriangle, UserX, X, Gavel, Trash2 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 
 interface MatchManagerProps {
@@ -16,21 +16,48 @@ const MatchManager: React.FC<MatchManagerProps> = ({ onCancel }) => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   
   // Date & Time
-  const [matchDate, setMatchDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [matchTime, setMatchTime] = useState(() => new Date().toTimeString().split(' ')[0].slice(0, 5));
+  const [matchDate, setMatchDate] = useState(() => {
+    if (matchToEdit) {
+        return new Date(matchToEdit.date).toISOString().split('T')[0];
+    }
+    return new Date().toISOString().split('T')[0];
+  });
+  
+  const [matchTime, setMatchTime] = useState(() => {
+    if (matchToEdit) {
+        return new Date(matchToEdit.date).toTimeString().split(' ')[0].slice(0, 5);
+    }
+    return new Date().toTimeString().split(' ')[0].slice(0, 5);
+  });
 
   // Setup State
-  const [matchType, setMatchType] = useState<MatchType>(MatchType.INTERNAL_FRIENDLY);
-  const [youtubeLink, setYoutubeLink] = useState('');
+  const [matchType, setMatchType] = useState<MatchType>(matchToEdit?.type || MatchType.INTERNAL_FRIENDLY);
+  const [youtubeLink, setYoutubeLink] = useState(matchToEdit?.youtubeLink || '');
   
   // Venue State
-  const [selectedStadiumId, setSelectedStadiumId] = useState<string>('custom');
-  const [customStadiumName, setCustomStadiumName] = useState('');
-  const [stadiumSize, setStadiumSize] = useState<StadiumSize>(StadiumSize.MEDIUM);
+  const [selectedStadiumId, setSelectedStadiumId] = useState<string>(() => {
+      if (matchToEdit) {
+          const existingStadium = stadiums.find(s => s.name === matchToEdit.stadiumName && s.size === matchToEdit.stadium);
+          return existingStadium ? existingStadium.id : 'custom';
+      }
+      return 'custom';
+  });
+  const [customStadiumName, setCustomStadiumName] = useState(() => {
+      if (matchToEdit && !stadiums.find(s => s.name === matchToEdit.stadiumName && s.size === matchToEdit.stadium)) {
+          return matchToEdit.stadiumName || '';
+      }
+      return '';
+  });
+  const [stadiumSize, setStadiumSize] = useState<StadiumSize>(matchToEdit?.stadium || StadiumSize.MEDIUM);
 
-  const [teamAName, setTeamAName] = useState('Team A');
-  const [teamBName, setTeamBName] = useState('Team B');
-  const [selectedPlayers, setSelectedPlayers] = useState<{ id: string, team: 'A' | 'B' }[]>([]);
+  const [teamAName, setTeamAName] = useState(matchToEdit?.teamAName || 'Team A');
+  const [teamBName, setTeamBName] = useState(matchToEdit?.teamBName || 'Team B');
+  const [selectedPlayers, setSelectedPlayers] = useState<{ id: string, team: 'A' | 'B' }[]>(() => {
+      if (matchToEdit) {
+          return matchToEdit.players.map(mp => ({ id: mp.playerId, team: mp.team }));
+      }
+      return [];
+  });
   
   // Search State for Squad Selection
   const [squadSearch, setSquadSearch] = useState('');
@@ -39,68 +66,36 @@ const MatchManager: React.FC<MatchManagerProps> = ({ onCancel }) => {
   // Stats State
   const [otherGoalsA, setOtherGoalsA] = useState(0);
   const [otherGoalsB, setOtherGoalsB] = useState(0);
-  const [playerPerformances, setPlayerPerformances] = useState<Record<string, { goals: number, assists: number, ownGoals: number, isGK: boolean, cleanSheet: boolean }>>({});
+  const [playerPerformances, setPlayerPerformances] = useState<Record<string, { goals: number, assists: number, ownGoals: number, isGK: boolean, cleanSheet: boolean, position: Position }>>(() => {
+      if (matchToEdit) {
+          const perfs: Record<string, any> = {};
+          matchToEdit.players.forEach(mp => {
+              // Find player to get default position if not in match stats (backward compatibility)
+              const playerProfile = players.find(p => p.id === mp.playerId);
+              perfs[mp.playerId] = {
+                  goals: mp.goals,
+                  assists: mp.assists,
+                  ownGoals: mp.ownGoals || 0,
+                  isGK: mp.isGK,
+                  cleanSheet: mp.cleanSheet,
+                  position: mp.position || playerProfile?.position || Position.MF
+              };
+          });
+          return perfs;
+      }
+      return {};
+  });
+
+  // Infractions State
+  const [currentInfractions, setCurrentInfractions] = useState<MatchInfraction[]>(matchToEdit?.infractions || []);
+  const [infractionPlayerId, setInfractionPlayerId] = useState('');
+  const [infractionType, setInfractionType] = useState<InfractionType>(InfractionType.LATE);
 
   // Effect to load match data if we are in Edit Mode
-  useEffect(() => {
-    if (matchToEdit) {
-      // 1. Parse Date/Time
-      const dateObj = new Date(matchToEdit.date);
-      setMatchDate(dateObj.toISOString().split('T')[0]);
-      setMatchTime(dateObj.toTimeString().split(' ')[0].slice(0, 5));
-
-      // 2. Setup Logistics
-      setMatchType(matchToEdit.type);
-      setYoutubeLink(matchToEdit.youtubeLink || '');
-      setTeamAName(matchToEdit.teamAName);
-      setTeamBName(matchToEdit.teamBName);
-
-      // 3. Stadium Logic
-      const existingStadium = stadiums.find(s => s.name === matchToEdit.stadiumName && s.size === matchToEdit.stadium);
-      if (existingStadium) {
-        setSelectedStadiumId(existingStadium.id);
-        setStadiumSize(existingStadium.size);
-      } else {
-        setSelectedStadiumId('custom');
-        setCustomStadiumName(matchToEdit.stadiumName || '');
-        setStadiumSize(matchToEdit.stadium);
-      }
-
-      // 4. Players & Performances
-      const selection: { id: string, team: 'A' | 'B' }[] = [];
-      const perfs: typeof playerPerformances = {};
-      
-      let calculatedScoreA = 0;
-      let calculatedScoreB = 0;
-
-      matchToEdit.players.forEach(mp => {
-        selection.push({ id: mp.playerId, team: mp.team });
-        perfs[mp.playerId] = {
-          goals: mp.goals,
-          assists: mp.assists,
-          ownGoals: mp.ownGoals || 0,
-          isGK: mp.isGK,
-          cleanSheet: mp.cleanSheet
-        };
-
-        if (mp.team === 'A') {
-            calculatedScoreA += mp.goals;
-            calculatedScoreB += (mp.ownGoals || 0);
-        } else {
-            calculatedScoreB += mp.goals;
-            calculatedScoreA += (mp.ownGoals || 0);
-        }
-      });
-
-      setSelectedPlayers(selection);
-      setPlayerPerformances(perfs);
-
-      setOtherGoalsA(Math.max(0, matchToEdit.scoreA - calculatedScoreA));
-      setOtherGoalsB(Math.max(0, matchToEdit.scoreB - calculatedScoreB));
-
-    }
-  }, [matchToEdit, stadiums]);
-
+  // NOTE: Initial state is now handled by lazy initialization. 
+  // We rely on the parent component to remount this component when matchToEdit changes (by using a key).
+  // This avoids the "setState in useEffect" anti-pattern.
+  
   const clearForm = () => {
     setMatchToEdit(null);
     setStep(1);
@@ -117,6 +112,8 @@ const MatchManager: React.FC<MatchManagerProps> = ({ onCancel }) => {
     setOtherGoalsA(0);
     setOtherGoalsB(0);
     setPlayerPerformances({});
+    setCurrentInfractions([]);
+    setInfractionPlayerId('');
   };
 
   const handleCancelClick = () => {
@@ -143,13 +140,18 @@ const MatchManager: React.FC<MatchManagerProps> = ({ onCancel }) => {
   const teamBPlayers = selectedPlayers.filter(p => p.team === 'B');
 
   const teamAGoalsFromPlayers = teamAPlayers.reduce((sum, p) => sum + (playerPerformances[p.id]?.goals || 0), 0);
+  const teamAAssists = teamAPlayers.reduce((sum, p) => sum + (playerPerformances[p.id]?.assists || 0), 0);
   const teamBOwnGoals = teamBPlayers.reduce((sum, p) => sum + (playerPerformances[p.id]?.ownGoals || 0), 0);
   
   const teamBGoalsFromPlayers = teamBPlayers.reduce((sum, p) => sum + (playerPerformances[p.id]?.goals || 0), 0);
+  const teamBAssists = teamBPlayers.reduce((sum, p) => sum + (playerPerformances[p.id]?.assists || 0), 0);
   const teamAOwnGoals = teamAPlayers.reduce((sum, p) => sum + (playerPerformances[p.id]?.ownGoals || 0), 0);
   
   const totalScoreA = teamAGoalsFromPlayers + teamBOwnGoals + otherGoalsA;
   const totalScoreB = teamBGoalsFromPlayers + teamAOwnGoals + otherGoalsB;
+
+  const showAssistWarningA = teamAAssists > totalScoreA;
+  const showAssistWarningB = teamBAssists > totalScoreB;
 
   const handleVenueChange = (val: string) => {
     setSelectedStadiumId(val);
@@ -191,7 +193,15 @@ const MatchManager: React.FC<MatchManagerProps> = ({ onCancel }) => {
     const perfs: typeof playerPerformances = { ...playerPerformances };
     selectedPlayers.forEach(p => {
       if (!perfs[p.id]) {
-          perfs[p.id] = { goals: 0, assists: 0, ownGoals: 0, isGK: false, cleanSheet: false };
+          const playerProfile = players.find(pl => pl.id === p.id);
+          perfs[p.id] = { 
+              goals: 0, 
+              assists: 0, 
+              ownGoals: 0, 
+              isGK: playerProfile?.position === Position.GK, // Auto-check GK if it's their main role
+              cleanSheet: false,
+              position: playerProfile?.position || Position.MF // Default to profile position
+          };
       }
     });
     setPlayerPerformances(perfs);
@@ -209,6 +219,25 @@ const MatchManager: React.FC<MatchManagerProps> = ({ onCancel }) => {
       ...prev,
       [playerId]: { ...prev[playerId], [field]: finalValue }
     }));
+  };
+
+  const handleAddInfraction = () => {
+      if (!infractionPlayerId) return;
+
+      // Validation: Check if player is in the squad
+      const isParticipating = selectedPlayers.some(p => p.id === infractionPlayerId);
+
+      if (infractionType === InfractionType.ABSENCE && isParticipating) {
+          showToast("Cannot mark a participating player as Absent. Please remove them from the squad first.", "error");
+          return;
+      }
+
+      setCurrentInfractions(prev => [...prev, { playerId: infractionPlayerId, type: infractionType }]);
+      setInfractionPlayerId('');
+  };
+
+  const handleRemoveInfraction = (index: number) => {
+      setCurrentInfractions(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleFinishMatch = () => {
@@ -231,7 +260,8 @@ const MatchManager: React.FC<MatchManagerProps> = ({ onCancel }) => {
       teamBName,
       scoreA: totalScoreA,
       scoreB: totalScoreB,
-      players: matchPlayers
+      players: matchPlayers,
+      infractions: currentInfractions
     };
 
     if (matchToEdit) {
@@ -548,7 +578,7 @@ const MatchManager: React.FC<MatchManagerProps> = ({ onCancel }) => {
                 </div>
             </div>
 
-            {/* Players Stats List - Same simplified logic for rendering */}
+            {/* Players Stats List */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {[
                     { team: 'A', name: teamAName, players: teamAPlayers, total: totalScoreA }, 
@@ -574,7 +604,15 @@ const MatchManager: React.FC<MatchManagerProps> = ({ onCancel }) => {
                                         <img src={p.avatarUrl} className="w-10 h-10 rounded-full bg-white" alt={p.name} />
                                         <div className="flex-1 min-w-0">
                                             <div className="font-bold truncate dark:text-white text-sm">{p.name}</div>
-                                            <div className="text-xs text-gray-500">{p.position}</div>
+                                            <select 
+                                                className="text-[10px] p-0.5 mt-0.5 border rounded bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white outline-none w-20"
+                                                value={stats.position}
+                                                onChange={(e) => updateStat(p.id, 'position', e.target.value)}
+                                            >
+                                                {Object.values(Position).map(pos => (
+                                                    <option key={pos} value={pos}>{pos}</option>
+                                                ))}
+                                            </select>
                                         </div>
                                         <div className="flex flex-col items-center">
                                             <span className="text-[10px] text-gray-400 mb-0.5 uppercase">Goals</span>
@@ -605,6 +643,95 @@ const MatchManager: React.FC<MatchManagerProps> = ({ onCancel }) => {
                     </div>
                 ))}
             </div>
+
+            {/* Discipline & Infractions Section */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center gap-2 mb-4 text-red-600 dark:text-red-400">
+                    <Gavel size={24} />
+                    <h3 className="font-bold text-xl">Discipline & Infractions</h3>
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                    Record late arrivals, last-minute registrations, or absences. These accumulate points for the "Breakfast Club" penalty.
+                </p>
+
+                <div className="flex flex-col md:flex-row gap-4 mb-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700">
+                    <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Player</label>
+                        <select 
+                            className="w-full p-2.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 dark:text-white"
+                            value={infractionPlayerId}
+                            onChange={(e) => setInfractionPlayerId(e.target.value)}
+                        >
+                            <option value="">-- Select Player --</option>
+                            {players.map(p => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Infraction</label>
+                        <select 
+                            className="w-full p-2.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 dark:text-white"
+                            value={infractionType}
+                            onChange={(e) => setInfractionType(e.target.value as InfractionType)}
+                        >
+                            {Object.values(InfractionType).map(t => (
+                                <option key={t} value={t}>{t.replace('_', ' ')}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex items-end">
+                        <button 
+                            onClick={handleAddInfraction}
+                            disabled={!infractionPlayerId}
+                            className="px-4 py-2.5 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                        >
+                            Add Record
+                        </button>
+                    </div>
+                </div>
+
+                {currentInfractions.length > 0 ? (
+                    <div className="space-y-2">
+                        {currentInfractions.map((inf, idx) => {
+                            const p = players.find(x => x.id === inf.playerId);
+                            return (
+                                <div key={idx} className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-800 rounded-lg">
+                                    <div className="flex items-center gap-3">
+                                        <img src={p?.avatarUrl} className="w-8 h-8 rounded-full bg-gray-200" alt={p?.name} />
+                                        <div>
+                                            <span className="font-bold dark:text-white block">{p?.name || 'Unknown'}</span>
+                                            <span className="text-xs text-red-600 dark:text-red-400 font-bold uppercase">{inf.type.replace('_', ' ')}</span>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => handleRemoveInfraction(idx)}
+                                        className="text-gray-400 hover:text-red-500 transition-colors p-2"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="text-center py-4 text-gray-400 italic text-sm">No infractions recorded for this match.</div>
+                )}
+            </div>
+
+            {(showAssistWarningA || showAssistWarningB) && (
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-xl flex items-start gap-3 mb-6 animate-fade-in">
+                    <AlertTriangle className="text-yellow-600 dark:text-yellow-400 mt-1" size={20} />
+                    <div>
+                        <h4 className="font-bold text-yellow-800 dark:text-yellow-300">Assist Logic Warning</h4>
+                        <div className="text-sm text-yellow-700 dark:text-yellow-400/80 space-y-1">
+                            {showAssistWarningA && <div>• {teamAName} has more assists ({teamAAssists}) than goals ({totalScoreA}).</div>}
+                            {showAssistWarningB && <div>• {teamBName} has more assists ({teamBAssists}) than goals ({totalScoreB}).</div>}
+                            <div className="mt-2 text-xs font-medium opacity-80">Note: An assist is only awarded if it directly leads to a goal.</div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="flex justify-end pt-6">
                 <button onClick={handleFinishMatch} className={`text-white px-8 py-4 rounded-xl font-bold text-lg shadow-xl flex items-center gap-3 transition-transform hover:scale-105 ${matchToEdit ? 'bg-amber-600 hover:bg-amber-500' : 'bg-pitch-600 hover:bg-pitch-500'}`}>

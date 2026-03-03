@@ -17,6 +17,19 @@ export enum Position {
   GK = 'Goalkeeper',
 }
 
+export enum AgeGroup {
+  U20 = 'U20',
+  TWENTIES = '20-29',
+  THIRTIES = '30-39',
+  FORTIES_PLUS = '40+',
+}
+
+export enum InfractionType {
+  LATE = 'LATE',
+  LAST_MINUTE = 'LAST_MINUTE',
+  ABSENCE = 'ABSENCE',
+}
+
 export interface Stadium {
   id: string;
   name: string;
@@ -41,6 +54,7 @@ export interface Player {
   id: string;
   name: string;
   position: Position;
+  ageGroup: AgeGroup; // New field
   avatarUrl?: string;
   isExternal?: boolean; // For ringing players
 }
@@ -48,11 +62,17 @@ export interface Player {
 export interface MatchPlayerStats {
   playerId: string;
   team: 'A' | 'B';
+  position?: Position; // Optional for backward compatibility, defaults to player profile
   goals: number;
   assists: number;
-  ownGoals: number; // New stat
+  ownGoals: number;
   isGK: boolean;
   cleanSheet: boolean;
+}
+
+export interface MatchInfraction {
+  playerId: string;
+  type: InfractionType;
 }
 
 export interface Match {
@@ -60,13 +80,14 @@ export interface Match {
   date: string;
   type: MatchType;
   stadium: StadiumSize;
-  stadiumName?: string; // Optional name of the venue
-  youtubeLink?: string; // Optional video link
+  stadiumName?: string;
+  youtubeLink?: string;
   teamAName: string;
   teamBName: string;
   scoreA: number;
   scoreB: number;
-  players: MatchPlayerStats[]; // Records who played in this match and their performance
+  players: MatchPlayerStats[];
+  infractions?: MatchInfraction[];
 }
 
 export interface SynergyPair {
@@ -77,13 +98,28 @@ export interface SynergyPair {
   winRate: number;
 }
 
+export interface DisciplineStat {
+  player: Player;
+  points: number;
+  breakdown: Record<InfractionType, number>;
+}
+
+export interface PositionEventPoints {
+  GOAL: number;
+  ASSIST: number;
+  CLEAN_SHEET: number;
+}
+
 export interface AppSettings {
   matchTypeWeights: Record<MatchType, number>;
   stadiumSizeWeights: Record<StadiumSize, number>;
+  ageGroupMultipliers: Record<AgeGroup, number>;
+  infractionPoints: Record<InfractionType, number>;
+  positionPoints: Record<Position, PositionEventPoints>; // New granular scoring
   basePoints: {
     GOAL: number;
     ASSIST: number;
-    OWN_GOAL: number; // New weighting
+    OWN_GOAL: number;
     CLEAN_SHEET: number;
     WIN: number;
     DRAW: number;
