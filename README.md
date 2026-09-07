@@ -39,14 +39,17 @@ Built with **React**, **TypeScript**, **Tailwind CSS**, and **Gemini AI**.
     ```
 
 3.  **Environment Setup**
-    Create a `.env` file in the root directory and add your Google Gemini API key:
+    Copy `.env.example` to `.env` and add your Google Gemini API key:
     ```env
-    API_KEY=your_google_gemini_api_key
+    GEMINI_API_KEY=your_google_gemini_api_key
     ```
+    This key is used only by the serverless function in `api/` and is never
+    bundled into the client.
 
 4.  **Run Development Server**
     ```bash
-    npm run dev
+    npm run dev          # Vite only — UI, no avatar API
+    npx vercel dev       # full stack, including the /api/generate-avatar function
     ```
 
 ## 🚀 Deploying to Vercel
@@ -55,7 +58,7 @@ This project is structured to be deployed instantly on Vercel.
 
 1.  Push your code to a GitHub repository.
 2.  Import the project in Vercel.
-3.  Add the `API_KEY` in the Vercel **Settings > Environment Variables** section.
+3.  Add `GEMINI_API_KEY` in the Vercel **Settings > Environment Variables** section (all environments). Do **not** use a `VITE_` prefix — that would expose it to the browser.
 4.  Click **Deploy**.
 
 ## 🤝 Contributing
