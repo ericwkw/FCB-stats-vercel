@@ -121,7 +121,7 @@ const PlayerList: React.FC = () => {
         showToast('New avatar generated!', 'success');
     } catch (err) {
         console.error(err);
-        showToast("Failed to generate avatar. Check API Key.", 'error');
+        showToast(err instanceof Error ? err.message : "Failed to generate avatar.", 'error');
     } finally {
         setGeneratingId(null);
     }
