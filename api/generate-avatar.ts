@@ -1,8 +1,20 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { GoogleGenAI } from '@google/genai';
 
 // Server-side proxy for Gemini image generation. The API key lives only in
 // GEMINI_API_KEY (a server env var) and never reaches the browser bundle.
+
+// Minimal shapes for the bits of the Vercel request/response we use. Avoids a
+// dependency on @vercel/node (a heavy build-runtime package) just for types.
+type Req = IncomingMessage & {
+  method?: string;
+  body?: unknown;
+  headers: IncomingMessage['headers'];
+};
+type Res = ServerResponse & {
+  status: (code: number) => Res;
+  json: (body: unknown) => void;
+};
 
 const MODEL = 'gemini-2.5-flash-image';
 
@@ -21,7 +33,7 @@ const rateLimited = (ip: string): boolean => {
 };
 
 // Only serve requests that originate from this deployment's own pages.
-const sameOrigin = (req: VercelRequest): boolean => {
+const sameOrigin = (req: Req): boolean => {
   const origin = req.headers.origin;
   if (!origin) return true; // non-CORS same-origin fetch sends no Origin header
   try {
@@ -32,7 +44,7 @@ const sameOrigin = (req: VercelRequest): boolean => {
   }
 };
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: Req, res: Res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
